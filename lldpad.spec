@@ -1,6 +1,6 @@
 Name:                   lldpad
 Version:                0.9.46
-Release:                2%{?dist}
+Release:                3%{?dist}
 Summary:                Intel LLDP Agent
 Group:                  System Environment/Daemons
 License:                GPLv2
@@ -11,6 +11,8 @@ Source0:                %{name}-%{version}.tar.gz
 Source1:                %{name}.init
 # rhbz#1017270
 Patch0:                 %{name}-0.9.46-multiple-vm-support.patch
+Patch1:                 lldpad-do-not-require-active-TLVs-to-configure-attri.patch
+Patch2:                 lldpad-correct-IEEE-DCBX-capabilities-check.patch
 
 BuildRequires:          autoconf
 BuildRequires:          automake
@@ -55,6 +57,8 @@ that use %{name}.
 %prep
 %setup -q
 %patch0 -p1
+%patch1 -p1
+%patch2 -p1
 
 %build
 ./bootstrap.sh
@@ -126,6 +130,9 @@ fi
 %{_libdir}/liblldp_clif.so
 
 %changelog
+* Fri Jun 27 2014 Chris Leech <cleech@redhat.com> - 0.9.46-3
+- Fix IEEE mode DCBX (#1104272)
+
 * Tue Oct 15 2013 Petr Šabata <contyk@redhat.com> - 0.9.46-2
 - Support multiple virtual machines again (#1017270)
 
