@@ -1,0 +1,14 @@
+diff --git a/lldp_8021qaz_cmds.c b/lldp_8021qaz_cmds.c
+index 0db2c9c..2ac442c 100644
+--- a/lldp_8021qaz_cmds.c
++++ b/lldp_8021qaz_cmds.c
+@@ -922,6 +922,9 @@ static int get_arg_enabled(struct cmd *cmd, char *args, UNUSED char *arg_value,
+ 		}
+ 	}
+ 
++	if (first)
++		strncpy(buf, "none", sizeof(buf));
++
+ 	sprintf(obuf, "%02x%s%04x%s",
+ 		(unsigned int) strlen(args), args,
+ 		(unsigned int) strlen(buf), buf);

@@ -1,0 +1,103 @@
+From d74ab7f823dc8f4bccd575f8d151d15e1e4128d6 Mon Sep 17 00:00:00 2001
+From: Thomas Richter <tmricht@linux.vnet.ibm.com>
+Date: Mon, 6 Aug 2012 15:20:01 -0700
+Subject: [PATCH] lldpad: bonding support for 802.1Qbg
+
+Added the bonded interfaces to the list of ports. Right now bond masters
+are chained by bond_porthead variable. This prohibits creating an agent
+on this bond master interface.
+
+With this patch the bond master is also added to the list of interfaces.
+The special bond master archor variable bond_porthead is not used
+anymore. Is is removed (together with dependend functions) with a
+later patch.
+
+Now use the bonding interface and the slave interfaces at the same
+time. Set configuration file correctly. Interface bondX allows EVB
+and VDP protocols when configured correctly. In this case the slave
+interfaces must not run both protocols.
+
+Correct configuration setting is prereq for correct operation.
+
+Signed-off-by: Thomas Richter <tmricht@linux.vnet.ibm.com>
+Signed-off-by: John Fastabend <john.r.fastabend@intel.com>
+---
+ config.c      |   13 +++----------
+ event_iface.c |    7 ++-----
+ lldp_vdp.c    |    4 ----
+ 3 files changed, 5 insertions(+), 19 deletions(-)
+
+diff --git a/config.c b/config.c
+index a3beab3..7229b91 100644
+--- a/config.c
++++ b/config.c
+@@ -162,12 +162,8 @@ void scan_port(UNUSED void *eloop_data, UNUSED void *user_ctx)
+ 		}
+ 
+ 		port = port_find_by_name(p->if_name);
+-		if (!port) {
+-			if (is_bond(p->if_name))
+-				port = add_bond_port(p->if_name);
+-			else
+-				port = add_port(p->if_name);
+-		}
++		if (!port)
++			port = add_port(p->if_name);
+ 
+ 		if (port && check_link_status(ifname)) {
+ 			set_port_oper_delay(ifname);
+@@ -374,10 +370,7 @@ void init_ports(void)
+ 			continue;
+ 		}
+ 
+-		if (is_bond(p->if_name))
+-			port = add_bond_port(p->if_name);
+-		else
+-			port = add_port(p->if_name);
++		port = add_port(p->if_name);
+ 
+ 		if (port == NULL) {
+ 			LLDPAD_ERR("%s: Error adding device %s\n",
+diff --git a/event_iface.c b/event_iface.c
+index 1ec3a61..0863ea3 100644
+--- a/event_iface.c
++++ b/event_iface.c
+@@ -204,10 +204,7 @@ int oper_add_device(char *device_name)
+ 	}
+ 
+ 	if (!port) {
+-		if (is_bond(device_name))
+-			newport = add_bond_port(device_name);
+-		else
+-			newport = add_port(device_name);
++		newport = add_port(device_name);
+ 
+ 		if (newport == NULL) {
+ 			LLDPAD_INFO("%s: Error adding device %s\n",
+@@ -217,7 +214,7 @@ int oper_add_device(char *device_name)
+ 
+ 		LLDPAD_INFO("%s: Adding device %s\n", __func__, device_name);
+ 		port = newport;
+-	} else if (!port->portEnabled)
++	} else if (is_bond(device_name) || !port->portEnabled)
+ 		reinit_port(device_name);
+ 
+ 	lldp_add_agent(device_name, NEAREST_BRIDGE);
+diff --git a/lldp_vdp.c b/lldp_vdp.c
+index 31bb84a..665c812 100644
+--- a/lldp_vdp.c
++++ b/lldp_vdp.c
+@@ -1494,10 +1494,6 @@ void vdp_ifup(char *ifname, struct lldp_agent *agent)
+ 	struct vsi_profile *p;
+ 	int enabletx = false;
+ 
+-	/* VDP does not support bonded devices */
+-	if (is_bond(ifname))
+-		return;
+-
+ 	LLDPAD_DBG("%s: %s agent:%d start VDP\n",
+ 		   __func__, ifname, agent->type);
+ 
+-- 
+1.7.10.4
+

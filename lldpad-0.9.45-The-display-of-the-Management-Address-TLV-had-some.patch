@@ -1,0 +1,93 @@
+From 327ef662eb08ca549c51a5e46b3fc6df5c36dee6 Mon Sep 17 00:00:00 2001
+From: John Fastabend <john.r.fastabend@intel.com>
+Date: Mon, 13 Aug 2012 20:47:41 -0700
+Subject: [PATCH] The display of the Management Address TLV had some errors.
+ Fixups include: - some TLV output not tabbed - passing bad
+ length to hexstr2bin when printing OID,   resulting in
+ debug code (removed) printing out - print errors for
+ incorrect OID lengths. - add oid data length to TLV length
+ when creating   the management address TLV (kind of a no-op
+ for now since   no OID is currently sent).
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Eric Multanen <eric.w.multanen@intel.com>
+Signed-off-by: Petr Šabata <contyk@redhat.com>
+---
+ lldp_basman.c      |  2 +-
+ lldp_basman_clif.c | 14 +++++++++-----
+ lldp_util.c        |  4 +---
+ 3 files changed, 11 insertions(+), 9 deletions(-)
+
+diff --git a/lldp_basman.c b/lldp_basman.c
+index b86bcee..4916e19 100644
+--- a/lldp_basman.c
++++ b/lldp_basman.c
+@@ -452,7 +452,7 @@ out_set:
+ 	length += sizeof(struct tlv_info_maif);
+ 	o = (struct tlv_info_maoid *)&data[length];
+ 	o->len = 0;
+-	length += sizeof(o->len);
++	length += sizeof(o->len) + o->len;
+ 
+ 	tlv = create_tlv();
+ 	if (!tlv)
+diff --git a/lldp_basman_clif.c b/lldp_basman_clif.c
+index ef245c6..7dba9d2 100644
+--- a/lldp_basman_clif.c
++++ b/lldp_basman_clif.c
+@@ -251,16 +251,16 @@ void print_mng_addr(u16 len, char *info)
+ 
+ 	switch (iftype) {
+ 	case IFNUM_UNKNOWN:
+-		printf("Unknown interface subtype: ");
++		printf("\tUnknown interface subtype: ");
+ 		break;
+ 	case IFNUM_IFINDEX:
+ 		printf("\tIfindex: ");
+ 		break;
+ 	case IFNUM_SYS_PORT_NUM:
+-		printf("System port number: ");
++		printf("\tSystem port number: ");
+ 		break;
+ 	default:
+-		printf("Bad interface numbering subtype: ");
++		printf("\tBad interface numbering subtype: ");
+ 		break;
+ 	}
+ 	printf("%d\n", ifnum);
+@@ -270,8 +270,12 @@ void print_mng_addr(u16 len, char *info)
+ 
+ 	if (oidlen && oidlen <= 128) {
+ 		memset(buf, 0, sizeof(buf));
+-		hexstr2bin(info+offset, (u8 *)&buf, sizeof(buf));
+-		printf("OID: %s", buf);
++		if (hexstr2bin(info+offset, (u8 *)&buf, oidlen))
++			printf("\tOID: Error parsing OID\n");
++		else
++			printf("\tOID: %s\n", buf);
++	} else if (oidlen > 128) {
++		printf("\tOID: Invalid length = %d\n", oidlen);
+ 	}
+ }
+ 
+diff --git a/lldp_util.c b/lldp_util.c
+index 3d6e12b..4dc15d5 100644
+--- a/lldp_util.c
++++ b/lldp_util.c
+@@ -114,10 +114,8 @@ int hexstr2bin(const char *hex, u8 *buf, size_t len)
+ 
+ 	for (i = 0; i < len; i++) {
+ 		a = hex2byte(ipos);
+-		if (a < 0) {
+-			printf("ipos=%2.2s, a=%x\n", ipos, a);
++		if (a < 0)
+ 			return -1;
+-		}
+ 		*opos++ = a;
+ 		ipos += 2;
+ 	}
+-- 
+1.7.11.4
+

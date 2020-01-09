@@ -1,0 +1,71 @@
+From fe4330d3db3d87a4ccea84f310f5a4dcb06dfc0e Mon Sep 17 00:00:00 2001
+From: Thomas Richter <tmricht@linux.vnet.ibm.com>
+Date: Mon, 6 Aug 2012 15:20:13 -0700
+Subject: [PATCH] lldpad: l2_packet_get_own_src_addr fixup
+
+Rewrite function l2_packet_get_own_src_addr() to use the linked list
+headed by porthead and check each interface for bond master status.
+
+The separate anchor bond_porthead for bond master interfaces is gone.
+
+Signed-off-by: Thomas Richter <tmricht@linux.vnet.ibm.com>
+Signed-off-by: John Fastabend <john.r.fastabend@intel.com>
+---
+ lldp/l2_packet_linux.c |    6 ++++--
+ lldp/ports.c           |    2 ++
+ lldp/ports.h           |    1 +
+ 3 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/lldp/l2_packet_linux.c b/lldp/l2_packet_linux.c
+index 2f8cafa..1ffdd92 100644
+--- a/lldp/l2_packet_linux.c
++++ b/lldp/l2_packet_linux.c
+@@ -67,9 +67,11 @@ int l2_packet_get_own_src_addr(struct l2_packet_data *l2, u8 *addr)
+ 		/* get an appropriate src MAC to use if the port is
+ 	 	* part of a bond.
+ 		*/
+-		struct port *bond_port = bond_porthead;
++		struct port *bond_port = porthead;
+ 		while (bond_port != NULL) {
+-			if (get_src_mac_from_bond(bond_port, l2->ifname, addr))
++			if (bond_port->bond_master
++			    && get_src_mac_from_bond(bond_port, l2->ifname,
++						     addr))
+ 				return 0;
+ 
+ 			bond_port = bond_port->next;
+diff --git a/lldp/ports.c b/lldp/ports.c
+index 21ecdf7..fa95389 100644
+--- a/lldp/ports.c
++++ b/lldp/ports.c
+@@ -41,6 +41,7 @@
+ #include "lldp_dcbx_nl.h"
+ #include "agent.h"
+ #include "lldp_dcbx_nl.h"
++#include "lldp_util.h"
+ 
+ struct port *porthead = NULL; /* port Head pointer */
+ 
+@@ -291,6 +292,7 @@ struct port *add_port(const char *ifname)
+ 		goto fail;
+ 	}
+ 
++	newport->bond_master = is_bond(ifname);
+ 	/* Initialize relevant port variables */
+ 	newport->hw_resetting = false;
+ 	newport->portEnabled = false;
+diff --git a/lldp/ports.h b/lldp/ports.h
+index c2dc165..2aa15c9 100644
+--- a/lldp/ports.h
++++ b/lldp/ports.h
+@@ -80,6 +80,7 @@ struct port {
+ 	u8 hw_resetting;
+ 	u8 portEnabled;
+ 	u8 prevPortEnabled;
++	u8 bond_master;		/* True if a bond master */
+ 	struct porttimers *timers;
+ 
+ 	u16 dormantDelay;
+-- 
+1.7.10.4
+
