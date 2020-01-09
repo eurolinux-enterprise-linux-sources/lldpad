@@ -1,56 +1,52 @@
-Name:                   lldpad
-Version:                0.9.46
-Release:                3%{?dist}
-Summary:                Intel LLDP Agent
-Group:                  System Environment/Daemons
-License:                GPLv2
-URL:                    http://open-lldp.org
-# Source is a git tag snapshot, git://open-lldp.org/lldp/open-lldp.git
-Source0:                %{name}-%{version}.tar.gz
-# RH specific initscript, rhbz#683837
-Source1:                %{name}.init
-# rhbz#1017270
-Patch0:                 %{name}-0.9.46-multiple-vm-support.patch
-Patch1:                 lldpad-do-not-require-active-TLVs-to-configure-attri.patch
-Patch2:                 lldpad-correct-IEEE-DCBX-capabilities-check.patch
+# https://fedoraproject.org/wiki/Packaging:Guidelines#Compiler_flags
+%define _hardened_build 1
 
-BuildRequires:          autoconf
-BuildRequires:          automake
-BuildRequires:          flex >= 2.5.33
-BuildRequires:          kernel-headers >= 2.6.32
-BuildRequires:          libconfig-devel >= 1.3.2
-BuildRequires:          libnl-devel
-BuildRequires:          libtool
-BuildRequires:          readline-devel
-Requires:               %{name}-libs%{?_isa} = %{version}-%{release}
-Requires(post):         chkconfig
-Requires(preun):        chkconfig
-Requires(preun):        initscripts
-Requires(postun):       initscripts
-Requires:               kernel >= 2.6.32
-Requires:               readline
-Provides:               dcbd = %{version}-%{release}
-Obsoletes:              dcbd < 0.9.26
+Name:               lldpad
+Version:            0.9.46
+Release:            10%{?dist}
+Summary:            Intel LLDP Agent
+Group:              System Environment/Daemons
+License:            GPLv2
+URL:                http://open-lldp.org/
+Source0:            %{name}-%{version}.tar.gz
+Source1:            %{name}.init
+Patch0:             %{name}-%{version}-123-g48a5f38.patch
+Patch1:             %{name}-0.9.46-Ignore-supplied-PG-configuration-if-PG-is-being-disabled.patch
+Requires:           kernel >= 2.6.32
+BuildRequires:      automake autoconf libtool
+BuildRequires:      flex >= 2.5.33
+BuildRequires:      kernel-headers >= 2.6.32
+BuildRequires:      libconfig-devel >= 1.3.2
+BuildRequires:      libnl3-devel
+BuildRequires:      readline-devel
+Requires:           %{name}-libs%{?_isa} = %{version}-%{release}
+Requires:           readline
+Requires(post):     chkconfig
+Requires(preun):    chkconfig
+Requires(preun):    initscripts
+Requires(postun):   initscripts
+Provides:           dcbd = %{version}-%{release}
+Obsoletes:          dcbd < 0.9.26
 
 %description
 This package contains the Linux user space daemon and configuration tool for
 Intel LLDP Agent with Enhanced Ethernet support for the Data Center.
 
-%package                libs
-Summary:                Libraries for communication with %{name}
-Group:                  Development/Librariesa
+%package            libs
+Summary:            Libraries for communication with %{name}
+Group:              Development/Libraries
 
-%description            libs
+%description        libs
 This package contains libraries used for communicating with %{name}.
 
-%package                devel
-Summary:                Development files for %{name} libraries
-Group:                  Development/Libraries
-Requires:               %{name}-libs%{?_isa} = %{version}-%{release}
-Provides:               dcbd-devel = %{version}-%{release}
-Obsoletes:              dcbd-devel < 0.9.26
+%package            devel
+Summary:            Development files for %{name} libraries
+Group:              Development/Libraries
+Requires:           %{name}-libs%{?_isa} = %{version}-%{release}
+Provides:           dcbd-devel = %{version}-%{release}
+Obsoletes:          dcbd-devel < 0.9.26
 
-%description            devel
+%description devel
 The %{name}-devel package contains header files for developing applications
 that use %{name}.
 
@@ -58,20 +54,24 @@ that use %{name}.
 %setup -q
 %patch0 -p1
 %patch1 -p1
-%patch2 -p1
 
 %build
 ./bootstrap.sh
 %configure --disable-static
+# fix the hardened build flags
+sed -i -e 's! \\\$compiler_flags !&\\\$CFLAGS \\\$LDFLAGS !' libtool
 make %{?_smp_mflags}
 
 %install
 make install DESTDIR=%{buildroot}
+mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 mkdir -p %{buildroot}%{_initddir}
 install -m755 %{SOURCE1} %{buildroot}%{_initddir}/lldpad
 rm -rf %{buildroot}/etc/init.d
 rm -f %{buildroot}%{_mandir}/man8/dcbd.8
 rm -f %{buildroot}%{_libdir}/liblldp_clif.la
+rm -f %{buildroot}/usr/lib/systemd/system/%{name}.service
+rm -f %{buildroot}/usr/lib/systemd/system/%{name}.socket
 
 %post
 /sbin/chkconfig --add %{name}
@@ -114,7 +114,6 @@ fi
 %{_sbindir}/*
 %dir %{_sharedstatedir}/%{name}
 %{_initddir}/%{name}
-%dir %{_sysconfdir}/bash_completion.d/
 %{_sysconfdir}/bash_completion.d/*
 %{_mandir}/man8/*
 
@@ -130,6 +129,9 @@ fi
 %{_libdir}/liblldp_clif.so
 
 %changelog
+* Tue Jan 24 2017 Chris Leech <cleech@redhat.com> - 0.9.46-10
+- 1376807 rebase to newer version from RHEL 7.1
+
 * Fri Jun 27 2014 Chris Leech <cleech@redhat.com> - 0.9.46-3
 - Fix IEEE mode DCBX (#1104272)
 
