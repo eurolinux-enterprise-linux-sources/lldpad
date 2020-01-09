@@ -50,11 +50,13 @@
 
 #include <netlink/msg.h>
 
+#include "clif.h"
+#include "clif_msgs.h"
+
 #define	UUIDLEN			16
 #define	DIM(x)			(sizeof(x)/sizeof(x[0]))
 #define	COPY_OP			"new="
 #define	KEYLEN			16
-#define LLDPAD_PID_FILE		"/var/run/lldpad.pid"
 #define CMD_ASSOC	'a'	/* Association */
 #define CMD_DEASSOC	'd'	/* DE-Association */
 #define CMD_PREASSOC	'p'	/* pre-Association */
@@ -278,7 +280,7 @@ static void showmsg(struct nlmsghdr *nlh, int *status)
 				    pvsi->vsi_type_id[1] << 8 |
 				    pvsi->vsi_type_id[0];
 				addit("\tIFLA_PORT_VSI_TYPE=mgr_id:%d "
-				    " type_id:%d typeid_version\n",
+				    " type_id:%d typeid_version:%d\n",
 				    pvsi->vsi_mgr_id, tid,
 				    pvsi->vsi_type_version);
 			}
@@ -663,32 +665,19 @@ static int open_socket(int protocol)
 }
 
 /*
- * Get PID of lldpad from pid file
+ * Get PID of lldpad from 'ping' command
  */
 static void lldpad_pid(void)
 {
-	FILE *fp;
-
-	fp = fopen(LLDPAD_PID_FILE, "r");
-	if (fp) {
-		char buffer[10];
-
-		memset(buffer, 0, sizeof buffer);
-		if (fgets(buffer, sizeof(buffer), fp) == 0) {
-			fprintf(stderr, "%s error parsing pid of lldpad\n",
-			    progname);
-			fclose(fp);
-			exit(3);
-		} else
-			lldpad = atoi(buffer);
-	} else {
-		perror(LLDPAD_PID_FILE);
-		exit(3);
+	lldpad = clif_getpid();
+	if (!lldpad) {
+		fprintf(stderr, "%s error getting pid of lldpad\n",
+			progname);
+		exit(5);
 	}
 	if (verbose >= 2)
 		printf("%s my pid %d lldpad pid %d\n", progname, getpid(),
 		    lldpad);
-	fclose(fp);
 }
 
 /*

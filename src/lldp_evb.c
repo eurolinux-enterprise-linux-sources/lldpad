@@ -103,7 +103,9 @@ static void evb_update_tlv(struct evb_data *ed)
 	 * - enable local tx
 	 */
 	if (!valid) {
-		LLDPAD_ERR("Neither standard nor rr set as forwarding modes\n");
+		LLDPAD_ERR("Neither standard nor rr set as forwarding modes ");
+		LLDPAD_ERR("for interface - %s\n", ed->ifname);
+
 		return;
 	}
 
@@ -271,7 +273,8 @@ static void evb_ifdown(char *ifname, struct lldp_agent *agent)
 		return;
 	}
 
-	evb_stop_modules(ifname, agent);
+	if (ed->vdp_start)
+		evb_stop_modules(ifname, agent);
 	LIST_REMOVE(ed, entry);
 	free(ed);
 	LLDPAD_INFO("%s:%s agent %d removed\n", __func__, ifname, agent->type);
@@ -392,8 +395,6 @@ int evb_timer(struct port *port, struct lldp_agent *agent)
 		evb_start_modules(port->ifname, agent);
 		vdp_update(port->ifname, ed->tie.ccap);
 	}
-	LLDPAD_DBG("%s:%s agent %d dormantDelay:%d\n",
-		   __func__, port->ifname, agent->type, port->dormantDelay);
 	return 0;
 }
 
@@ -420,7 +421,7 @@ void evb_unregister(struct lldp_module *mod)
 		free(mod->data);
 	}
 	free(mod);
-	LLDPAD_DBG("%s:done", __func__);
+	LLDPAD_DBG("%s:done\n", __func__);
 }
 
 static const struct lldp_mod_ops evb_ops =  {

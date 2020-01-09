@@ -35,22 +35,16 @@
 #include "lldp.h"
 #include "lldp_vdp.h"
 #include "lldp_mand_clif.h"
-#include "lldp_vdp_clif.h"
 #include "lldp_vdp_cmds.h"
+#include "lldp_qbg_utils.h"
 #include "lldp/ports.h"
+#include "lldp_tlv.h"
 #include "messages.h"
 #include "libconfig.h"
 #include "config.h"
 #include "clif_msgs.h"
 #include "lldpad_status.h"
 #include "lldp/states.h"
-
-static const char * const vsi_modes[] = {
-	[VDP_MODE_PREASSOCIATE] = "VDP_MODE_PREASSOCIATED",
-	[VDP_MODE_PREASSOCIATE_WITH_RR] = "VDP_MODE_PREASSOCIATED_WITH_RR",
-	[VDP_MODE_ASSOCIATE] = "VDP_MODE_ASSOCIATED",
-	[VDP_MODE_DEASSOCIATE] = "VDP_MODE_DEASSOCIATED",
-};
 
 static char *check_and_update(size_t *total, size_t *length, char *s, int c)
 {
@@ -63,62 +57,18 @@ static char *check_and_update(size_t *total, size_t *length, char *s, int c)
 	return s + c;
 }
 
-char *print_profile(char *s, size_t length, struct vsi_profile *p)
+static char *print_mode(char *s, size_t length, struct vsi_profile *p)
 {
 	int c;
 	size_t	total = 0;
 	char *r = s;
 	struct mac_vlan *mac_vlan;
+	char instance[VDP_UUID_STRLEN + 2];
 
-	c = snprintf(s, length, "\nmode: %i (%s)\n",
-			p->mode, vsi_modes[p->mode]);
-	s = check_and_update(&total, &length, s, c);
-	if (!s)
-		return r;
-
-	c = snprintf(s, length, "response: %i (%s)\n", p->response,
-		     vdp_response2str(p->response));
-	s = check_and_update(&total, &length, s, c);
-	if (!s)
-		return r;
-
-	c = snprintf(s, length, "state: %i (%s)\n",
-		     p->state, vsi_states[p->state]);
-	s = check_and_update(&total, &length, s, c);
-	if (!s)
-		return r;
-
-	c = snprintf(s, length, "mgrid: %i\n", p->mgrid);
-	s = check_and_update(&total, &length, s, c);
-	if (!s)
-		return r;
-
-	c = snprintf(s, length, "id: %i (%#x)\n", p->id, p->id);
-	s = check_and_update(&total, &length, s, c);
-	if (!s)
-		return r;
-
-	c = snprintf(s, length, "version: %i\n", p->version);
-	s = check_and_update(&total, &length, s, c);
-	if (!s)
-		return r;
-
-	{
-		char instance[INSTANCE_STRLEN + 2];
-
-		instance2str(p->instance, instance, sizeof(instance));
-		c = snprintf(s, length, "instance: %s\n", &instance[0]);
-	}
-	s = check_and_update(&total, &length, s, c);
-	if (!s)
-		return r;
-
-	c = snprintf(s, length, "format: %#x\n", p->format);
-	s = check_and_update(&total, &length, s, c);
-	if (!s)
-		return r;
-
-	c = snprintf(s, length, "entries: %u\n", p->entries);
+	vdp_uuid2str(p->instance, instance, sizeof(instance));
+	c = snprintf(s, length, "%d,%d,%d,%d,%s,%d",
+		     p->state, p->mgrid, p->id, p->version, instance,
+		     p->format);
 	s = check_and_update(&total, &length, s, c);
 	if (!s)
 		return r;
@@ -127,32 +77,11 @@ char *print_profile(char *s, size_t length, struct vsi_profile *p)
 		char macbuf[MAC_ADDR_STRLEN + 1];
 
 		mac2str(mac_vlan->mac, macbuf, MAC_ADDR_STRLEN);
-		c = snprintf(s, length, "mac: %s\n", macbuf);
-		s = check_and_update(&total, &length, s, c);
-		if (!s)
-			return r;
-
-		c = snprintf(s, length, "vlan: %i\n", mac_vlan->vlan);
-		s = check_and_update(&total, &length, s, c);
-		if (!s)
-			return r;
-
-		c = snprintf(s, length, "qos: %i\n", mac_vlan->qos);
-		s = check_and_update(&total, &length, s, c);
-		if (!s)
-			return r;
-
-		c = snprintf(s, length, "pid: %i\n", mac_vlan->req_pid);
-		s = check_and_update(&total, &length, s, c);
-		if (!s)
-			return r;
-
-		c = snprintf(s, length, "seq: %i\n", mac_vlan->req_seq);
+		c = snprintf(s, length, ",%s,%d", macbuf, mac_vlan->vlan);
 		s = check_and_update(&total, &length, s, c);
 		if (!s)
 			return r;
 	}
-
 	return s;
 }
 
@@ -246,10 +175,10 @@ static int test_arg_tlvtxenable(struct cmd *cmd, char *arg, char *argvalue,
 static int get_arg_mode(struct cmd *cmd, char *arg, UNUSED char *argvalue,
 			char *obuf, int obuf_len)
 {
-	char *s, *t;
 	struct vsi_profile *np;
 	struct vdp_data *vd;
-	int count=0;
+	char mode_str[VDP_BUF_SIZE], *t = mode_str;
+	int filled = 0;
 
 	if (cmd->cmd != cmd_gettlv)
 		return cmd_invalid;
@@ -267,25 +196,18 @@ static int get_arg_mode(struct cmd *cmd, char *arg, UNUSED char *argvalue,
 	if (!vd) {
 		LLDPAD_ERR("%s: vdp_data for %s not found !\n",
 			    __func__, cmd->ifname);
-		return cmd_invalid;
+		return cmd_device_not_found;
 	}
 
-	LIST_FOREACH(np, &vd->profile_head, profile)
-		count++;
-
-	s = t = malloc((count + 1) * VDP_BUF_SIZE);
-	if (!s)
-		return cmd_invalid;
-	memset(s, 0, (count + 1) * VDP_BUF_SIZE);
-
-	LIST_FOREACH(np, &vd->profile_head, profile)
-		t = print_profile(t, (count + 1) * VDP_BUF_SIZE, np);
+	memset(mode_str, 0, sizeof mode_str);
+	LIST_FOREACH(np, &vd->profile_head, profile) {
+		t = print_mode(t, sizeof(mode_str) - filled, np);
+		filled = t - mode_str;
+	}
 
 	snprintf(obuf, obuf_len, "%02x%s%04x%s",
-		 (unsigned int)strlen(arg), arg, (unsigned int)strlen(s), s);
-
-	free(s);
-
+		 (unsigned int)strlen(arg), arg, (unsigned int)strlen(mode_str),
+		 mode_str);
 	return cmd_success;
 }
 
@@ -302,21 +224,6 @@ static void str2instance(struct vsi_profile *profile, char *buffer)
 			j++;
 		}
 	}
-}
-
-/* INSTANCE_STRLEN = strlen("fa9b7fff-b0a0-4893-abcd-beef4ff18f8f") */
-#define INSTANCE_STRLEN 36
-
-int instance2str(const u8 *p, char *dst, size_t size)
-{
-	if (dst && size > INSTANCE_STRLEN) {
-		snprintf(dst, size, "%02x%02x%02x%02x-%02x%02x-%02x%02x"
-			 "-%02x%02x-%02x%02x%02x%02x%02x%02x",
-			 p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
-			 p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
-		return 0;
-	}
-	return -1;
 }
 
 static void vdp_fill_profile(struct vsi_profile *profile, char *buffer,
@@ -349,7 +256,7 @@ static void vdp_fill_profile(struct vsi_profile *profile, char *buffer,
 	}
 }
 
-static struct vsi_profile *vdp_parse_mode_line(char * argvalue)
+static struct vsi_profile *vdp_parse_mode_line(char *argvalue)
 {
 	int field;
 	char *cmdstring, *parsed;
@@ -387,7 +294,10 @@ static struct vsi_profile *vdp_parse_mode_line(char * argvalue)
 		if (mac_vlan == NULL)
 			goto out_free;
 
-		str2mac(parsed, &mac_vlan->mac[0], MAC_ADDR_LEN);
+		if (str2mac(parsed, &mac_vlan->mac[0], MAC_ADDR_LEN)) {
+			free(mac_vlan);
+			goto out_free;
+		}
 
 		parsed = strtok(NULL, ",");
 		if (parsed == NULL) {
@@ -413,6 +323,7 @@ out_free:
 static int _set_arg_mode(struct cmd *cmd, char *argvalue, bool test)
 {
 	struct vsi_profile *profile, *p;
+	struct vdp_data *vd;
 
 	if (cmd->cmd != cmd_settlv)
 		return cmd_invalid;
@@ -434,7 +345,13 @@ static int _set_arg_mode(struct cmd *cmd, char *argvalue, bool test)
 
 	if (!profile->port) {
 		vdp_delete_profile(profile);
-		return cmd_invalid;
+		return cmd_device_not_found;
+	}
+
+	vd = vdp_data(cmd->ifname);
+	if (!vd) {
+		vdp_delete_profile(profile);
+		return cmd_device_not_found;
 	}
 
 	if (test) {
@@ -442,13 +359,7 @@ static int _set_arg_mode(struct cmd *cmd, char *argvalue, bool test)
 		return cmd_success;
 	}
 
-	p = vdp_add_profile(profile);
-
-	if (!p) {
-		vdp_delete_profile(profile);
-		return cmd_invalid;
-	}
-
+	p = vdp_add_profile(vd, profile);
 	if (profile != p)
 		vdp_delete_profile(profile);
 
@@ -482,7 +393,7 @@ static int get_arg_role(struct cmd *cmd, char *arg, UNUSED char *argvalue,
 		if (!vd) {
 			LLDPAD_ERR("%s: could not find vdp_data for %s\n",
 				    __FILE__, cmd->ifname);
-			return cmd_invalid;
+			return cmd_device_not_found;
 		}
 
 		if (vd->role == VDP_ROLE_STATION)
@@ -528,7 +439,7 @@ static int _set_arg_role(struct cmd *cmd, char *arg, char *argvalue, bool test)
 	if (!vd) {
 		LLDPAD_ERR("%s: could not find vdp_data for %s\n",
 			    __FILE__, cmd->ifname);
-		return cmd_invalid;
+		return cmd_device_not_found;
 	}
 
 	if (!strcasecmp(argvalue, VAL_BRIDGE)) {
@@ -595,4 +506,163 @@ static struct arg_handlers arg_handlers[] = {
 struct arg_handlers *vdp_get_arg_handlers()
 {
 	return &arg_handlers[0];
+}
+
+/*
+ * Interface to build information for lldptool -V vdp
+ */
+struct tlv_info_vdp_nopp {	/* VSI information without profile data */
+	u8 oui[3];		/* OUI */
+	u8 sub;			/* Subtype */
+	u8 role;		/* Role: station or bridge */
+	u8 enabletx;
+	u8 vdpbit_on;
+}  __attribute__ ((__packed__));
+
+/*
+ * Flatten a profile stored as TLV and append it. Skip the first 4 bytes.
+ * They contain the OUI already stored.
+ * Returns the number of bytes added to the buffer.
+ */
+static int add_profile(unsigned char *pdu, size_t pdusz, struct vdp_data *vdp)
+{
+	size_t size = 0;
+
+	if (!vdp->vdp)
+		return size;
+	size = (unsigned)TLVSIZE(vdp->vdp) - 4;
+	if (pdusz >= size)
+		memcpy(pdu, vdp->vdp->info + 4, size);
+	else {
+		LLDPAD_ERR("%s: %s buffer size too small (need %d bytes)\n",
+			   __func__, vdp->ifname, TLVSIZE(vdp->vdp));
+		return -1;
+	}
+	return size;
+}
+
+/*
+ * Create unpacked VDP tlv for VSI profile when active.
+ */
+static int make_vdp_tlv(unsigned char *pdu, size_t pdusz, struct vdp_data *vdp)
+{
+	struct unpacked_tlv *tlv = (struct unpacked_tlv *)pdu;
+	struct tlv_info_vdp_nopp *vdpno;
+	size_t pduoff;
+	int rc;
+
+	tlv->info = (unsigned char *)(tlv + 1);
+	vdpno = (struct tlv_info_vdp_nopp *)tlv->info;
+	tlv->type = ORG_SPECIFIC_TLV;
+	tlv->length = sizeof(struct tlv_info_vdp_nopp);
+	hton24(vdpno->oui, LLDP_MOD_VDP);
+	vdpno->sub = LLDP_VDP_SUBTYPE;
+	vdpno->role = vdp->role;
+	vdpno->enabletx = vdp->enabletx;
+	vdpno->vdpbit_on = vdp->vdpbit_on;
+	pduoff = sizeof(*tlv) + tlv->length;
+	pdusz -= pduoff;
+	rc = add_profile(pdu + pduoff, pdusz - pduoff, vdp);
+	if (rc > 0) {
+		tlv->length += rc;
+		rc = 0;
+	}
+	return rc;
+}
+
+/*
+ * Flatten a VDP TLV into a byte stream.
+ */
+static int vdp_clif_profile(char *ifname, char *rbuf, size_t rlen)
+{
+	unsigned char pdu[VDP_BUF_SIZE];	/* Buffer for unpacked TLV */
+	int i, c, rstatus = cmd_success;
+	size_t sum  = 0;
+	struct vdp_data *vd;
+	struct unpacked_tlv *tlv = (struct unpacked_tlv *)pdu;
+	struct packed_tlv *ptlv;
+
+	LLDPAD_DBG("%s: %s rlen:%zu\n", __func__, ifname, rlen);
+	vd = vdp_data(ifname);
+	if (!vd)
+		return cmd_device_not_found;
+
+	if (make_vdp_tlv(pdu, sizeof pdu, vd))
+		return cmd_failed;
+
+	/* Convert to packed TLV */
+	ptlv = pack_tlv(tlv);
+	if (!ptlv)
+		return cmd_failed;
+	for (i = 0; i < TLVSIZE(tlv); ++i) {
+		c = snprintf(rbuf, rlen, "%02x", ptlv->tlv[i]);
+		rbuf = check_and_update(&sum, &rlen, rbuf, c);
+		if (!rbuf) {
+			rstatus = cmd_failed;
+			break;
+		}
+	}
+	free_pkd_tlv(ptlv);
+	return rstatus;
+}
+
+/*
+ * Module function to extract all VSI profile data on a given interface. It
+ * is invoked via 'lldptool -t -i ethx -g ncb -V vdp' without any configuration
+ * options.
+ * This function does not support arguments and its values. They are handled
+ * using the lldp_mand_cmds.c interfaces.
+ */
+int vdp_clif_cmd(char *ibuf, UNUSED int ilen, char *rbuf, int rlen)
+{
+	struct cmd cmd;
+	u8 len, version;
+	int c, ioff;
+	size_t roff = 0, outlen = rlen;
+	char *here;
+	int rstatus = cmd_invalid;
+
+	/* Pull out the command elements of the command message */
+	hexstr2bin(ibuf + MSG_VER, (u8 *)&version, sizeof(u8));
+	version >>= 4;
+	hexstr2bin(ibuf + CMD_CODE, (u8 *)&cmd.cmd, sizeof(cmd.cmd));
+	hexstr2bin(ibuf + CMD_OPS, (u8 *)&cmd.ops, sizeof(cmd.ops));
+	cmd.ops = ntohl(cmd.ops);
+	hexstr2bin(ibuf + CMD_IF_LEN, &len, sizeof(len));
+	ioff = CMD_IF;
+	if (len < sizeof(cmd.ifname))
+		memcpy(cmd.ifname, ibuf + CMD_IF, len);
+	else
+		return cmd_failed;
+	cmd.ifname[len] = '\0';
+	ioff += len;
+
+	memset(rbuf, 0, rlen);
+	c = snprintf(rbuf, rlen, "%c%1x%02x%08x%02x%s",
+		     CMD_REQUEST, CLIF_MSG_VERSION, cmd.cmd, cmd.ops,
+		     (unsigned int)strlen(cmd.ifname), cmd.ifname);
+	here = check_and_update(&roff, &outlen, rbuf, c);
+	if (!here)
+		return cmd_failed;
+
+	if (version == CLIF_MSG_VERSION) {
+		hexstr2bin(ibuf+ioff, &cmd.type, sizeof(cmd.type));
+		ioff += 2 * sizeof(cmd.type);
+	} else	/* Command valid only for nearest customer bridge */
+		goto out;
+
+	if (cmd.cmd == cmd_gettlv) {
+		hexstr2bin(ibuf+ioff, (u8 *)&cmd.tlvid, sizeof(cmd.tlvid));
+		cmd.tlvid = ntohl(cmd.tlvid);
+		ioff += 2 * sizeof(cmd.tlvid);
+	} else
+		goto out;
+
+	c = snprintf(here, outlen, "%08x", cmd.tlvid);
+	here = check_and_update(&roff, &outlen, here, c);
+	if (!here)
+		return cmd_failed;
+	rstatus = vdp_clif_profile(cmd.ifname, here, outlen);
+out:
+	return rstatus;
 }

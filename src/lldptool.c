@@ -46,6 +46,7 @@
 #include "lldp_med_clif.h"
 #include "lldp_8023_clif.h"
 #include "lldp_dcbx_clif.h"
+#include "lldp_evb22_clif.h"
 #include "lldp_evb_clif.h"
 #include "lldp_vdp_clif.h"
 #include "lldp_8021qaz_clif.h"
@@ -156,6 +157,7 @@ static const char *commands_help =
 "  license                              show license information\n"
 "  -h|help                              show command usage information\n"
 "  -v|version                           show version\n"
+"  -p|ping                              ping lldpad and query pid of lldpad\n"
 "  -q|quit                              exit lldptool (interactive mode)\n"
 "  -S|stats                             get LLDP statistics for ifname\n"
 "  -t|get-tlv                           get TLVs from ifname\n"
@@ -176,6 +178,7 @@ struct lldp_module *(*register_tlv_table[])(void) = {
 	ieee8023_cli_register,
 	med_cli_register,
 	dcbx_cli_register,
+	evb22_cli_register,
 	evb_cli_register,
 	vdp_cli_register,
 	ieee8021qaz_cli_register,
@@ -476,7 +479,7 @@ static int request(struct clif *clif, int argc, char *argv[])
 
 	opterr = 0;
 	for (;;) {
-		c = getopt_long(argc, argv, "Si:tTlLhcdnvrRqV:g:",
+		c = getopt_long(argc, argv, "Si:tTlLhcdnvrRpqV:g:",
 				lldptool_opts, &option_index);
 		if (c < 0)
 			break;
@@ -521,6 +524,8 @@ static int request(struct clif *clif, int argc, char *argv[])
 			if (!command.tlvid || errno || *end != '\0' ||
 			    end == optarg) {
 				command.tlvid = lookup_tlvid(optarg);
+				if (!strcasecmp("vdp", optarg))
+					command.module_id = command.tlvid;
 			}
 
 			if (command.tlvid == INVALID_TLVID) {
@@ -528,6 +533,9 @@ static int request(struct clif *clif, int argc, char *argv[])
 					optarg);
 				return -1;
 			}
+			break;
+		case 'p':
+			command.cmd = cmd_ping;
 			break;
 		case 'q':
 			command.cmd = cmd_quit;
@@ -578,6 +586,12 @@ static int request(struct clif *clif, int argc, char *argv[])
 			ret = -1;
 		}
 	}
+	/*
+	 * If -V vdp option is set together with -c option, use standard
+	 * module to retrieve data.
+	 */
+	if ((command.ops & op_config) && command.tlvid == command.module_id)
+		command.module_id = LLDP_MOD_MAND;
 
 	/* if no command was supplied via an option flag, then
 	 * the first remaining argument should be the command.

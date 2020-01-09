@@ -3,7 +3,7 @@ sbin_PROGRAMS = lldpad dcbtool lldptool
 
 # package nltest and vdptest, but do not install it anywhere
 if BUILD_DEBUG
-noinst_PROGRAMS = nltest vdptest
+noinst_PROGRAMS = nltest vdptest qbg22sim
 endif
 
 # look for header files in the include directory
@@ -40,7 +40,8 @@ include/lldpad_shm.h include/event_iface.h include/messages.h \
 include/parse_cli.h include/version.h include/lldptool_cli.h include/list.h \
 include/lldp_mand_clif.h include/lldp_basman_clif.h include/lldp_med_clif.h \
 include/lldp_8023_clif.h include/lldp_dcbx_clif.h include/lldp_evb_clif.h \
-include/lldp_vdp_clif.h include/lldp_8021qaz_clif.h \
+include/lldp_evb22_clif.h include/lldp_vdp_clif.h include/lldp_vdpnl.h \
+include/lldp_8021qaz_clif.h \
 include/lldp_orgspec_clif.h include/lldp_cisco_clif.h \
 include/lldptool.h include/lldp_rtnl.h include/dcbtool.h include/lldp_dcbx_cfg.h
 
@@ -55,15 +56,19 @@ lldp_dcbx.c include/lldp_dcbx.h tlv_dcbx.c include/tlv_dcbx.h \
 lldp_dcbx_cfg.c include/lldp_dcbx_cfg.h lldp_util.c \
 lldp_mand.c include/lldp_mand.h \
 lldp_mand_cmds.c lldp_basman_cmds.c lldp_8023_cmds.c lldp_med_cmds.c \
-lldp_evb_cmds.c lldp_evb.c include/lldp_evb.h lldp_vdp_cmds.c lldp_vdp_utils.c \
+lldp_evb_cmds.c lldp_evb.c include/lldp_evb.h lldp_vdp_cmds.c \
 include/lldp_vdp_cmds.h \
-ecp/ecp.c ecp/ecp_tx.c ecp/ecp_rx.c ecp/ecp.h lldp_vdp.c include/lldp_vdp.h \
+include/lldp_ecp.h include/lldp_qbg_utils.h lldp_ecp.c lldp_qbg_utils.c \
+lldp_vdp.c include/lldp_vdp.h \
 lldp_tlv.c include/lldp_tlv.h \
 lldp_basman.c include/lldp_basman.h \
 lldp_med.c include/lldp_med.h \
 lldp_8023.c include/lldp_8023.h \
 lldp_8021qaz.c include/lldp_8021qaz.h \
-lldp_8021qaz_cmds.c include/lldp_8021qaz_cmds.h
+lldp_8021qaz_cmds.c include/lldp_8021qaz_cmds.h \
+include/lldp_evb22.h qbg/lldp_evb22.c qbg/lldp_evb22_cmds.c \
+include/lldp_qbg22.h include/lldp_ecp22.h qbg/lldp_ecp22.c \
+include/lldp_vdp22.h qbg/lldp_vdp22.c qbg/lldp_vdpnl.c
 
 lib_LTLIBRARIES = liblldp_clif.la
 liblldp_clif_la_LDFLAGS = -version-info 1:0:0
@@ -79,7 +84,7 @@ lldptool_SOURCES = lldptool.c lldptool_cmds.c lldp_rtnl.c \
 		   lldp_mand_clif.c lldp_basman_clif.c lldp_med_clif.c \
 		   lldp_8023_clif.c lldp_dcbx_clif.c lldp_util.c \
 		   lldp_8021qaz_clif.c lldp_evb_clif.c lldp_vdp_clif.c \
-		   lldp_orgspec_clif.c lldp_cisco_clif.c \
+		   lldp_orgspec_clif.c lldp_cisco_clif.c qbg/lldp_evb22_clif.c \
 		   weak_readline.c $(lldpad_include_HEADERS) $(noinst_HEADERS)
 lldptool_LDADD = ${srcdir}/liblldp_clif.la
 lldptool_LDFLAGS = -ldl -llldp_clif
@@ -87,16 +92,26 @@ lldptool_LDFLAGS = -ldl -llldp_clif
 if BUILD_DEBUG
 nltest_SOURCES = test/nltest.c test/nltest.h
 vdptest_SOURCES = test/vdptest.c
+vdptest_LDFLAGS = -llldp_clif
+qbg22sim_SOURCES = test/qbg22sim.c
+qbg22sim_LDFLAGS = -lrt
 endif
 
 ## man pages
 dist_man_MANS = docs/lldpad.8 docs/dcbtool.8 docs/lldptool.8 \
 		docs/lldptool-ets.8 docs/lldptool-pfc.8 docs/lldptool-app.8 \
-		docs/lldptool-evb.8 docs/lldptool-vdp.8 docs/lldptool-med.8
+		docs/lldptool-evb.8 docs/lldptool-vdp.8 docs/lldptool-med.8 \
+		docs/lldptool-dcbx.8 \
+		docs/lldptool-evb22.8
+if BUILD_DEBUG
+nodist_man_MANS = test/qbg22sim.1 test/vdptest.1
+endif
 
 ## force the creation of an empty configuration directory at install time
 lldpadconfigdir = /var/lib/lldpad
-lldpadconfig_DATA =
+installdirs-local:	
+	$(MKDIR_P) $(DESTDIR)$(lldpadconfigdir)
+install-data-hook:	installdirs-local
 
 ## pkg-config data file, for client interface software to find headers
 pkgconfigdir = ${libdir}/pkgconfig

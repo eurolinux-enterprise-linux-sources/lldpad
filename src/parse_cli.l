@@ -442,6 +442,12 @@ gp	{ if (!cmd) {
 				else
 					BEGIN(cmddone);
 				}
+<getappsubtype>:[fF][iI][pP][  \\t]		{ appsubtype = 2;
+				if (cmd == CMD_SET_CONFIG)
+					BEGIN(getappargs);
+				else
+					BEGIN(cmddone);
+				}
 
 <getappargs>appcfg:		{
 				if (got_args & GOT_APPCFG) {
@@ -993,6 +999,14 @@ int parse_dcb_cmd(char *buf)
 					if (!badarg)
 						badarg = strdup("invalid appcfg"
 							" length for iSCSI");
+					error = 1;
+				}
+				break;
+			case APP_FIP_STYPE:
+				if (strlen(appcfg_p) != 2) {
+					if (!badarg)
+						badarg = strdup("invalid appcfg"
+							" length for FIP");
 					error = 1;
 				}
 				break;

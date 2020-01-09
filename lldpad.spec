@@ -1,6 +1,6 @@
 Name:                   lldpad
-Version:                0.9.45
-Release:                7%{?dist}
+Version:                0.9.46
+Release:                2%{?dist}
 Summary:                Intel LLDP Agent
 Group:                  System Environment/Daemons
 License:                GPLv2
@@ -9,18 +9,8 @@ URL:                    http://open-lldp.org
 Source0:                %{name}-%{version}.tar.gz
 # RH specific initscript, rhbz#683837
 Source1:                %{name}.init
-# RH specific patches
-Patch0:	                %{name}-0.9.41-lldptool-invalid-pointer.patch
-# rhbz#819938#7, 327ef662
-Patch1:                 %{name}-0.9.45-The-display-of-the-Management-Address-TLV-had-some.patch
-# rhbz#738897, bd20de50, fe4330d3, d74ab7f8
-Patch2:                 %{name}-0.9.45-bonding-support-for-802.1Qbg.patch
-Patch3:                 %{name}-0.9.45-l2_packet_get_own_src_addr-fixup.patch
-Patch4:                 %{name}-0.9.45-remove-unreferenced-functions.patch
-# rhbz#870576
-Patch5:                 %{name}-0.9.45-pfc-enabled_handle_get_callback_does_not_add.patch
-# rhbz#870578
-Patch6:                 %{name}-0.9.45-8021qaz-removing-a-tlv-does-not-update-mib.patch
+# rhbz#1017270
+Patch0:                 %{name}-0.9.46-multiple-vm-support.patch
 
 BuildRequires:          autoconf
 BuildRequires:          automake
@@ -64,15 +54,7 @@ that use %{name}.
 
 %prep
 %setup -q
-# Red Hat patches on top
-%patch0 -p1 -b .lldptool-invalid-pointer
-# Additional patches
-%patch1 -p1
-%patch2 -p1
-%patch3 -p1
-%patch4 -p1
-%patch5 -p1
-%patch6 -p1
+%patch0 -p1
 
 %build
 ./bootstrap.sh
@@ -144,6 +126,12 @@ fi
 %{_libdir}/liblldp_clif.so
 
 %changelog
+* Tue Oct 15 2013 Petr Šabata <contyk@redhat.com> - 0.9.46-2
+- Support multiple virtual machines again (#1017270)
+
+* Thu Jun 20 2013 Petr Šabata <contyk@redhat.com> - 0.9.46-1
+- Update o 0.9.46 (#829816)
+
 * Fri Nov 23 2012 Petr Šabata <contyk@redhat.com> - 0.9.45-7
 - Correct changelog bug references, thanks to Petr Písař
 - Add explicit libs subpackage dependency
