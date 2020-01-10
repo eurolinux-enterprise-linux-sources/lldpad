@@ -142,7 +142,6 @@ int is_autoneg_supported(const char *ifname);
 int get_mtu(const char *);
 int get_mfs(const char *);
 int get_ifflags(const char *);
-int get_ifname(int ifindex, char *ifname);
 int get_maucaps(const char *);
 int get_mautype(const char *);
 int get_ifpflags(const char *);

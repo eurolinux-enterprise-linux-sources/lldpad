@@ -541,35 +541,42 @@ static void basman_free_tlv(struct basman_data *bd)
 /* build unpacked tlvs */
 static int basman_bld_tlv(struct basman_data *bd, struct lldp_agent *agent)
 {
-	if (!port_find_by_ifindex(get_ifidx(bd->ifname)))
-		return -EEXIST;
+	int rc = EPERM;
+
+	if (!port_find_by_name(bd->ifname)) {
+		rc = EEXIST;
+		goto out_err;
+	}
 
 	if (basman_bld_portdesc_tlv(bd, agent)) {
 		LLDPAD_DBG("%s:%s:basman_bld_portdesc_tlv() failed\n",
-			   __func__, bd->ifname);
-		return -EPERM;
+				__func__, bd->ifname);
+		goto out_err;
 	}
 	if (basman_bld_sysname_tlv(bd, agent)) {
 		LLDPAD_DBG("%s:%s:basman_bld_sysname_tlv() failed\n",
-			   __func__, bd->ifname);
-		return -EPERM;
+				__func__, bd->ifname);
+		goto out_err;
 	}
 	if (basman_bld_sysdesc_tlv(bd, agent)) {
 		LLDPAD_DBG("%s:%s:basman_bld_sysdesc_tlv() failed\n",
-			   __func__, bd->ifname);
-		return -EPERM;
+				__func__, bd->ifname);
+		goto out_err;
 	}
 	if (basman_bld_syscaps_tlv(bd, agent)) {
 		LLDPAD_DBG("%s:%s:basman_bld_syscaps_tlv() failed\n",
-			   __func__, bd->ifname);
-		return -EPERM;
+				__func__, bd->ifname);
+		goto out_err;
 	}
 	if (basman_bld_manaddr_tlv(bd, agent)) {
 		LLDPAD_DBG("%s:%s:basman_bld_manaddr_tlv() failed\n",
-			   __func__, bd->ifname);
-		return -EPERM;
+				__func__, bd->ifname);
+		goto out_err;
 	}
-	return 0;
+	rc = 0;
+
+out_err:
+	return rc;
 }
 
 static void basman_free_data(struct basman_user_data *bud)

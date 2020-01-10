@@ -76,8 +76,7 @@ enum portEnableStatus {
 
 /* lldp port specific structure */
 struct port {
-	struct port *next;
-	int ifindex;
+	char *ifname;
 	u8 hw_resetting;
 	u8 portEnabled;
 	u8 prevPortEnabled;
@@ -88,7 +87,8 @@ struct port {
 
 	LIST_HEAD(agent_head, lldp_agent) agent_head;
 	struct l2_packet_data *l2;
-	char ifname[IFNAMSIZ];
+
+	struct port *next;
 };
 
 extern struct port *porthead;
@@ -96,8 +96,8 @@ extern struct port *porthead;
 #ifdef __cplusplus
 extern "C" {
 #endif
-struct port *add_port(int ifindex, const char *);
-int remove_port(const char *);
+struct port *add_port(const char *);
+int remove_port(char *);
 #ifdef __cplusplus
 }
 #endif
@@ -118,13 +118,15 @@ void set_port_oper_delay(const char *ifname);
 int reinit_port(const char *ifname);
 void set_agent_oper_delay(const char *ifname, int type);
 
-static inline struct port *port_find_by_ifindex(int ifindex)
+static inline struct port *port_find_by_name(const char *ifname)
 {
 	struct port *port = porthead;
 
-	for (port = porthead; port; port = port->next)
-		if (ifindex == port->ifindex)
+	while (port) {
+		if (!strncmp(ifname, port->ifname, IFNAMSIZ))
 			return port;
+		port = port->next;
+	}
 	return NULL;
 }
 

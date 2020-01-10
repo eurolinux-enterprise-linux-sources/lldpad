@@ -349,9 +349,6 @@ static char *print_status(cmd_status status)
 	case cmd_no_access:
 		str = "Access denied";
 		break;
-	case cmd_agent_not_supported:
-		str = "TLV does not support agent type";
-		break;
 	default:
 		str = "Unknown status";
 		break;
@@ -465,10 +462,12 @@ static void print_tlvs(struct cmd *cmd, char *ibuf)
 		
 		printed = 0;
 		LIST_FOREACH(np, &lldp_head, lldp) {
-			if (np->ops->print_tlv(tlvid, tlv_len, ibuf+offset)) {
+			if (np->ops->print_tlv)
+				if (np->ops->print_tlv(tlvid, tlv_len,
+					ibuf+offset)) {
 					printed = 1;
 					break;
-			}
+				}
 		}
 
 		if (!printed) {

@@ -78,11 +78,16 @@ static struct arg_handlers arg_handlers[] = {
 static int get_mand_subtype(struct cmd *cmd, char *arg, UNUSED char *argvalue,
 			    char *obuf, int obuf_len)
 {
+	struct mand_data *md;
 	int subtype;
 	char *string, arg_path[256];
 
 	if (cmd->cmd != cmd_gettlv)
 		return cmd_invalid;
+
+	md = mand_data(cmd->ifname, cmd->type);
+	if (!md)
+		return cmd_device_not_found;
 
 	switch (cmd->tlvid) {
 	case CHASSIS_ID_TLV:
@@ -178,6 +183,8 @@ static int _set_mand_subtype(struct cmd *cmd, char *arg, char *argvalue,
 		return cmd_invalid;
 
 	md = mand_data(cmd->ifname, cmd->type);
+	if (!md)
+		return cmd_device_not_found;
 
 	switch (cmd->tlvid) {
 	case CHASSIS_ID_TLV:
@@ -254,11 +261,9 @@ static int _set_mand_subtype(struct cmd *cmd, char *arg, char *argvalue,
 	if (test)
 		return cmd_success;
 
-	if (md) {
-		md->read_shm = 1;
-		md->rebuild_chassis = 1;
-		md->rebuild_portid = 1;
-	}
+	md->read_shm = 1;
+	md->rebuild_chassis = 1;
+	md->rebuild_portid = 1;
 
 	snprintf(arg_path, sizeof(arg_path), "%s%08x.%s", TLVID_PREFIX,
 		 cmd->tlvid, arg);
@@ -565,10 +570,6 @@ int get_tlvs(struct cmd *cmd, char *rbuf, int rlen)
 	u16 type, len;
 	int res;
 
-	/* VDP 0.2 protocol for nearest customer bridge only */
-	if (cmd->tlvid == (OUI_IEEE_8021Qbg << 8)
-	    && cmd->type != NEAREST_CUSTOMER_BRIDGE)
-		return cmd_agent_not_supported;
 	if (cmd->ops & op_local) {
 		res = get_local_tlvs(cmd->ifname, cmd->type, &tlvs[0], &size);
 		if (res)
@@ -651,6 +652,7 @@ int mand_clif_cmd(UNUSED void  *data,
 		  char *rbuf, int rlen)
 {
 	struct cmd cmd;
+	struct port *port;
 	u8 len, version;
 	int ioff, roff;
 	int rstatus = cmd_invalid;
@@ -725,8 +727,9 @@ int mand_clif_cmd(UNUSED void  *data,
 		(unsigned int)strlen(cmd.ifname), cmd.ifname);
 	roff = strlen(rbuf);
 
-	/* Confirm port is a valid LLDP port */
-	if (!get_ifidx(cmd.ifname) || !is_valid_lldp_device(cmd.ifname)) {
+	/* Confirm port is a lldpad managed port */
+	port = port_find_by_name(cmd.ifname);
+	if (!port) {
 		free(argvals);
 		free(args);
 		return cmd_device_not_found;

@@ -124,43 +124,56 @@ int get_lldp_agent_admin(const char *ifname, int type)
 
 void set_lldp_agent_admin(const char *ifname, int type, int admin)
 {
-	struct port *port;
+	struct port *port = NULL;
 	struct lldp_agent *agent;
-	int ifindex = get_ifidx(ifname);
+	int all = 0;
+	int tmp;
 
-	if (!ifindex)
-		return;
+	all = !strlen(ifname);
 
-	for (port = porthead; port; port = port->next) {
-		if (ifindex == port->ifindex)
-			break;
-	}
+	port = porthead;
+	while (port != NULL) {
+		if (all || !strncmp(ifname, port->ifname, IFNAMSIZ)) {
+			/* don't change a port which has an explicit setting
+			 * on a global setting change
+			 */
+			if (all && (!get_config_setting(port->ifname,
+							type,
+							ARG_ADMINSTATUS,
+							(void *)&tmp,
+							CONFIG_TYPE_INT))) {
+				port = port->next;
+				continue;
+			}
 
-	if (!port)
-		return;
+			agent = lldp_agent_find_by_type(port->ifname, type);
+			if (!agent) {
+				port = port->next;
+				continue;
+			}
 
-	agent = lldp_agent_find_by_type(port->ifname, type);
-	if (!agent)
-		return;
+			if (agent->adminStatus != admin) {
+				agent->adminStatus = admin;
+				somethingChangedLocal(ifname, type);
+				run_tx_sm(port, agent);
+				run_rx_sm(port, agent);
+			}
 
-	/* Set ifname with ifindex reported ifname */
-	if (strncmp(port->ifname, ifname, IFNAMSIZ) !=  0)
-		memcpy(port->ifname, ifname, IFNAMSIZ);
-
-	if (agent->adminStatus != admin) {
-		agent->adminStatus = admin;
-		somethingChangedLocal(port->ifname, type);
-		run_tx_sm(port, agent);
-		run_rx_sm(port, agent);
+			if (!all)
+				break;
+		}
+		port = port->next;
 	}
 }
 
 void set_lldp_port_enable(const char *ifname, int enable)
 {
-	struct port *port = port_find_by_ifindex(get_ifidx(ifname));
+	struct port *port = NULL;
 	struct lldp_agent *agent = NULL;
 
-	if (!port)
+	port = port_find_by_name(ifname);
+
+	if (port == NULL)
 		return;
 
 	port->portEnabled = (u8)enable;
@@ -179,9 +192,9 @@ void set_lldp_port_enable(const char *ifname, int enable)
 
 void set_port_oper_delay(const char *ifname)
 {
-	struct port *port = port_find_by_ifindex(get_ifidx(ifname));
+	struct port *port = port_find_by_name(ifname);
 
-	if (!port)
+	if (port == NULL)
 		return;
 
 	port->dormantDelay = DORMANT_DELAY;
@@ -191,9 +204,11 @@ void set_port_oper_delay(const char *ifname)
 
 int set_port_hw_resetting(const char *ifname, int resetting)
 {
-	struct port *port = port_find_by_ifindex(get_ifidx(ifname));
+	struct port *port = NULL;
 
-	if (!port)
+	port = port_find_by_name(ifname);
+
+	if (port == NULL)
 		return -1;
 
 	port->hw_resetting = (u8)resetting;
@@ -203,18 +218,22 @@ int set_port_hw_resetting(const char *ifname, int resetting)
 
 int get_port_hw_resetting(const char *ifname)
 {
-	struct port *port = port_find_by_ifindex(get_ifidx(ifname));
+	struct port *port = NULL;
+
+	port = port_find_by_name(ifname);
 
 	if (port)
 		return port->hw_resetting;
-
-	return 0;
+	else
+		return 0;
 }
 
 int reinit_port(const char *ifname)
 {
-	struct port *port = port_find_by_ifindex(get_ifidx(ifname));
 	struct lldp_agent *agent;
+	struct port *port;
+
+	port = port_find_by_name(ifname);
 
 	if (!port)
 		return -1;
@@ -249,23 +268,29 @@ int reinit_port(const char *ifname)
 	return 0;
 }
 
-struct port *add_port(int ifindex, const char *ifname)
+struct port *add_port(const char *ifname)
 {
 	struct port *newport;
 
-	for (newport = porthead; newport; newport = newport->next)
-		if (ifindex == newport->ifindex)
-			return NULL;
+	newport = porthead;
+	while (newport != NULL) {
+		if (!strncmp(ifname, newport->ifname, IFNAMSIZ))
+			return 0;
+		newport = newport->next;
+	}
 
-	newport = malloc(sizeof(*newport));
-	if (!newport) {
+	newport  = (struct port *)malloc(sizeof(struct port));
+	if (newport == NULL) {
 		LLDPAD_DBG("new port malloc failed\n");
 		goto fail;
 	}
-	memset(newport, 0, sizeof(*newport));
-	newport->ifindex = ifindex;
+	memset(newport,0,sizeof(struct port));
 	newport->next = NULL;
-	strncpy(newport->ifname, ifname, IFNAMSIZ);
+	newport->ifname = strdup(ifname);
+	if (newport->ifname == NULL) {
+		LLDPAD_DBG("new port name malloc failed\n");
+		goto fail;
+	}
 
 	newport->bond_master = is_bond(ifname);
 	/* Initialize relevant port variables */
@@ -293,14 +318,16 @@ struct port *add_port(int ifindex, const char *ifname)
 	return newport;
 
 fail:
-	if (newport)
+	if(newport) {
+		if(newport->ifname)
+			free(newport->ifname);
 		free(newport);
+	}
 	return NULL;
 }
 
-int remove_port(const char *ifname)
+int remove_port(char *ifname)
 {
-	int ifindex = get_ifidx(ifname);
 	struct port *port;    /* Pointer to port to remove */
 	struct port *parent = NULL;  /* Pointer to previous on port stack */
 	struct lldp_agent *agent;
@@ -321,7 +348,7 @@ int remove_port(const char *ifname)
 	LLDPAD_DBG("In %s: Found port %s\n", __func__, port->ifname);
 
 	/* Set linkmode to off */
-	set_linkmode(ifindex, port->ifname, 0);
+	set_linkmode(ifname, 0);
 
 	/* Close down the socket */
 	l2_packet_deinit(port->l2);
@@ -366,6 +393,9 @@ int remove_port(const char *ifname)
 		parent->next = port->next;
 	else
 		return -1;
+
+	if (port->ifname)
+		free(port->ifname);
 
 	free(port);
 

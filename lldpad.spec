@@ -1,54 +1,25 @@
 # https://fedoraproject.org/wiki/Packaging:Guidelines#Compiler_flags
 %define _hardened_build 1
 
-%global checkout 036e314
-
 Name:               lldpad
-Version:            1.0.1
-Release:            5.git%{checkout}%{?dist}
+Version:            0.9.46
+Release:            9%{?dist}
 Summary:            Intel LLDP Agent
 Group:              System Environment/Daemons
 License:            GPLv2
 URL:                http://open-lldp.org/
 Source0:            %{name}-%{version}.tar.gz
-Patch1:             open-lldp-v1.0.1-1-VDP-vdp22_cmds-retrieve-vsi-paramenter-data.patch
-Patch2:             open-lldp-v1.0.1-2-VDP-vdptool-first-version.patch
-Patch3:             open-lldp-v1.0.1-3-VDP-vdptool-test-cases-Some-test-cases-to-test-the-n.patch
-Patch4:             open-lldp-v1.0.1-4-VDP-Changes-to-make-the-interface-to-VDP22-in-lldpad.patch
-Patch5:             open-lldp-v1.0.1-5-VDP-Support-for-get-tlv-in-vdptool-and-VDP22.patch
-Patch6:             open-lldp-v1.0.1-6-VDP-Support-in-VDP22-for-correct-error-code-status-t.patch
-Patch7:             open-lldp-v1.0.1-7-VDP-Support-for-OUI-infrastructure-in-VDP22.patch
-Patch8:             open-lldp-v1.0.1-8-VDP-Support-for-OUI-infrastructure-in-vdptool.patch
-Patch9:             open-lldp-v1.0.1-9-VDP-Support-for-OUI-infrastructure-in-vdp22.patch
-Patch10:            open-lldp-v1.0.1-10-VDP-Support-for-OUI-infrastructure-in-vdp22.patch
-Patch11:            open-lldp-v1.0.1-11-VDP-Support-for-Cisco-specific-OUI-extensions-to-VDP.patch
-Patch12:            open-lldp-v1.0.1-12-VDP22-Fix-the-ack-timeout-handler-to-set-the-right-t.patch
-Patch13:            open-lldp-v1.0.1-13-VDP-Changes-in-OUI-infra-for-get-tlv.patch
-Patch14:            open-lldp-v1.0.1-14-VDP-Changes-in-Cisco-OUI-handlers-to-support-get-tlv.patch
-Patch15:            open-lldp-v1.0.1-15-VDP-Add-vdptool-man-page-to-Makefile.patch
-Patch16:            open-lldp-v1.0.1-16-VDP-Fixed-DBG-print-compile-errors-in-32-bit-systems.patch
-Patch17:            open-lldp-v1.0.1-17-lldp-automake-fixes-for-dist-distcheck.patch
-Patch18:            open-lldp-v1.0.1-18-enabled-test-tool-building-for-distcheck.patch
-Patch19:            open-lldp-v1.0.1-19-nltest-build-error.patch
-Patch20:            open-lldp-v1.0.1-20-lldp-automake-fix-drop-prefix-on-vdptool_LDADD.patch
-Patch21:            open-lldp-v1.0.1-21-lldpad-Fix-DCBX-event-generation-from-lldpad.patch
-Patch22:            open-lldp-v1.0.1-22-vdp-Fixed-the-memory-leak-for-modify-VSI-support-for.patch
-Patch23:            open-lldp-v1.0.1-23-lldp-make-TTL-TLV-configurable.patch
-Patch24:            open-lldp-v1.0.1-24-switch-from-sysv-to-posix-shared-memory-apis.patch
-Patch25:            open-lldp-v1.0.1-25-l2_linux_packet-correctly-process-return-value-of-ge.patch
-Patch26:            open-lldp-v1.0.1-26-lldpad-system-capability-incorrect-advertised-as-sta.patch
-# not upstream
-Patch27:            open-lldp-v1.0.1-27-fix-build-warnings.patch
-Patch99:            lldpad-0.9.46-Ignore-supplied-PG-configuration-if-PG-is-being-disabled.patch
-Patch100:           open-lldp-v1.0.1-28-fix-oid-display.patch
-Patch101:           0001-memleak-on-received-TLVs-from-modules.patch
-
+Patch0:             %{name}-0.9.46-multiple-vm-support.patch
+Patch1:             %{name}-0.9.46-migrate-properly-with-vepa.patch
+Patch2:             %{name}-0.9.46-Ignore-supplied-PG-configuration-if-PG-is-being-disabled.patch
+Patch3:             lldpad-do-not-require-active-TLVs-to-configure-attri.patch
+Patch4:             lldpad-correct-IEEE-DCBX-capabilities-check.patch
 Requires:           kernel >= 2.6.32
 BuildRequires:      automake autoconf libtool
 BuildRequires:      flex >= 2.5.33
 BuildRequires:      kernel-headers >= 2.6.32
 BuildRequires:      libconfig-devel >= 1.3.2
-BuildRequires:      libnl3-devel
+BuildRequires:      libnl-devel
 BuildRequires:      readline-devel
 BuildRequires:      systemd
 Requires:           readline
@@ -74,7 +45,12 @@ The %{name}-devel package contains header files for developing applications
 that use %{name}.
 
 %prep
-%autosetup -p1
+%setup -q
+%patch0 -p1
+%patch1 -p1
+%patch2 -p1
+%patch3 -p1
+%patch4 -p1
 
 %build
 ./bootstrap.sh
@@ -85,19 +61,23 @@ make %{?_smp_mflags}
 
 %install
 make install DESTDIR=%{buildroot}
+rm -f %{buildroot}%{_mandir}/man8/dcbd.8
+mkdir -p %{buildroot}%{_unitdir}
+install -m644 %{name}.service %{buildroot}%{_unitdir}
+rm -rf %{buildroot}/etc/init.d
 mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 rm -f %{buildroot}%{_libdir}/liblldp_clif.la
 
 %post
 /sbin/ldconfig
-%systemd_post %{name}.service %{name}.socket
+%systemd_post %{name}.service
 
 %preun
-%systemd_preun %{name}.service %{name}.socket
+%systemd_preun %{name}.service
 
 %postun
 /sbin/ldconfig
-%systemd_postun_with_restart %{name}.service %{name}.socket
+%systemd_postun_with_restart %{name}.service
 
 %post devel
 ## provide legacy support for apps that use the old dcbd interface.
@@ -122,10 +102,8 @@ fi
 %{_libdir}/liblldp_clif.so.*
 %dir %{_sharedstatedir}/%{name}
 %{_unitdir}/%{name}.service
-%{_unitdir}/%{name}.socket
 %dir %{_sysconfdir}/bash_completion.d/
 %{_sysconfdir}/bash_completion.d/*
-%{_mandir}/man3/*
 %{_mandir}/man8/*
 
 %files devel
@@ -134,25 +112,6 @@ fi
 %{_libdir}/liblldp_clif.so
 
 %changelog
-* Tue Feb 26 2019 Aaron Conole <aconole@redhat.com> - 1.0.1-5.git036e314
-- Fix memory leak on TLV reception (#1196320)
-
-* Wed Aug 08 2018 Aaron Conole <aconole@redhat.com> - 1.0.1-4.git036e314
-- fix the OID printing routine (#1551623)
-
-* Wed Jul 06 2016 Chris Leech <cleech@redhat.com> - 1.0.1-3.git036e314
-- 1273663 sync with upstream v1.0.1-26-g036e314
-  system capability incorrect advertised as station only
-
-* Wed Aug 12 2015 Chris Leech <cleech@redhat.com> - 1.0.1-2.git986eb2e
-- convert from sysv shm to posix, to allow selinux restorecon (#1080287)
-
-* Thu Jun 18 2015 Chris Leech <cleech@redhat.com> - 1.0.1-1.git986eb2e
-- rebased to upstream v1.0.1-23-g986eb2e (#1175802)
-
-* Tue Oct 21 2014 Chris Leech <cleech@redhat.com> - 0.9.46-10
-- Sync with upstream v0.9.46-123-g48a5f38 (#1087096)
-
 * Fri Jun 27 2014 Chris Leech <cleech@redhat.com> - 0.9.46-9
 - Fix IEEE mode DCBX (#1102886)
 

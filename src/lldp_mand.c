@@ -464,9 +464,8 @@ out_err:
 static int mand_bld_tlv(struct mand_data *md, struct lldp_agent *agent)
 {
 	int rc = EPERM;
-	int ifindex = get_ifidx(md->ifname);
 
-	if (!port_find_by_ifindex(ifindex)) {
+	if (!port_find_by_name(md->ifname)) {
 		rc = EEXIST;
 		goto out_err;
 	}
@@ -656,13 +655,13 @@ void mand_unregister(struct lldp_module *mod)
 	struct mand_data *md;
 
 	nameidx = if_nameindex();
-	if (!nameidx) {
+	if (nameidx == NULL) {
 		LLDPAD_DBG("error calling if_nameindex()\n");
 		return;
 	}
 
 	for (p = nameidx; p->if_index != 0; p++) {
-		port = port_find_by_ifindex(p->if_index);
+		port = port_find_by_name(p->if_name);
 		if (!port)
 			continue;
 
