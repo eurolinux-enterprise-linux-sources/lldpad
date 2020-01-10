@@ -5,7 +5,7 @@
 
 Name:               lldpad
 Version:            1.0.1
-Release:            3.git%{checkout}%{?dist}
+Release:            5.git%{checkout}%{?dist}
 Summary:            Intel LLDP Agent
 Group:              System Environment/Daemons
 License:            GPLv2
@@ -40,6 +40,8 @@ Patch26:            open-lldp-v1.0.1-26-lldpad-system-capability-incorrect-adver
 # not upstream
 Patch27:            open-lldp-v1.0.1-27-fix-build-warnings.patch
 Patch99:            lldpad-0.9.46-Ignore-supplied-PG-configuration-if-PG-is-being-disabled.patch
+Patch100:           open-lldp-v1.0.1-28-fix-oid-display.patch
+Patch101:           0001-memleak-on-received-TLVs-from-modules.patch
 
 Requires:           kernel >= 2.6.32
 BuildRequires:      automake autoconf libtool
@@ -132,6 +134,12 @@ fi
 %{_libdir}/liblldp_clif.so
 
 %changelog
+* Tue Feb 26 2019 Aaron Conole <aconole@redhat.com> - 1.0.1-5.git036e314
+- Fix memory leak on TLV reception (#1196320)
+
+* Wed Aug 08 2018 Aaron Conole <aconole@redhat.com> - 1.0.1-4.git036e314
+- fix the OID printing routine (#1551623)
+
 * Wed Jul 06 2016 Chris Leech <cleech@redhat.com> - 1.0.1-3.git036e314
 - 1273663 sync with upstream v1.0.1-26-g036e314
   system capability incorrect advertised as station only
