@@ -308,9 +308,17 @@ int	get_src_mac_from_bond(struct port *bond_port, char *ifname, u8 *addr)
 	return 1;
 }
 
+/*
+ * Return true if the mac address is valid (non-zero and no hardware
+ * broadcast address)
+ */
 int is_valid_mac(const u8 *mac)
 {
-	return !!(mac[0] | mac[1] | mac[2] | mac[3] | mac[4] | mac[5]);
+	if (0 == (mac[0] | mac[1] | mac[2] | mac[3] | mac[4] | mac[5]))
+		return 0;
+	if (0xff == (mac[0] & mac[1] & mac[2] & mac[3] & mac[4] & mac[5]))
+		return 0;
+	return 1;
 }
 
 int read_int(const char *path)
@@ -347,6 +355,25 @@ int get_ifflags(const char *ifname)
 			flags = ifr.ifr_flags;
 	}
 	return flags;
+}
+
+int get_ifname(int ifindex, char *ifname)
+{
+	int fd;
+	int rc;
+	struct ifreq ifr;
+
+	memset(&ifr, 0, sizeof(ifr));
+	fd = get_ioctl_socket();
+	if (fd < 0)
+		return -1;
+
+	ifr.ifr_ifindex = ifindex;
+	rc = ioctl(fd, SIOCGIFNAME, &ifr);
+	if (rc >= 0)
+		memcpy(ifname, ifr.ifr_name, IFNAMSIZ);
+
+	return rc;
 }
 
 int get_ifpflags(const char *ifname)
@@ -1185,7 +1212,7 @@ int get_arg_val_list(char *ibuf, int ilen, int *ioff,
 			*ioff += arglen;
 			*(arglens+i) = arglen;
 
-			if (ilen - *ioff > 2 * (int)sizeof(argvalue_len)) {
+			if (ilen - *ioff >= 2 * (int)sizeof(argvalue_len)) {
 				hexstr2bin(ibuf+*ioff, (u8 *)&argvalue_len,
 					   sizeof(argvalue_len));
 				argvalue_len = ntohs(argvalue_len);

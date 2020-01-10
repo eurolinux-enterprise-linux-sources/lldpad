@@ -46,45 +46,6 @@
 
 #define NLMSG_SIZE 1024
 
-/*
- * Helper functions to construct a netlink message.
- * The functions assume the nlmsghdr.nlmsg_len is set correctly.
- */
-void mynla_nest_end(struct nlmsghdr *nlh, struct nlattr *start)
-{
-	start->nla_type |= NLA_F_NESTED;
-	start->nla_len = (void *)nlh + nlh->nlmsg_len - (void *)start;
-}
-
-struct nlattr *mynla_nest_start(struct nlmsghdr *nlh, int type)
-{
-	struct nlattr *ap = (struct nlattr *)((void *)nlh + nlh->nlmsg_len);
-
-	ap->nla_type = type;
-	nlh->nlmsg_len += NLA_HDRLEN;
-	return ap;
-}
-
-void mynla_put(struct nlmsghdr *nlh, int type, size_t len, void *data)
-{
-	struct nlattr *ap = (struct nlattr *)((void *)nlh + nlh->nlmsg_len);
-
-	ap->nla_type = type;
-	ap->nla_len = NLA_HDRLEN + len;
-	memcpy(ap + 1, data, len);
-	nlh->nlmsg_len += NLA_HDRLEN + NLA_ALIGN(len);
-}
-
-void mynla_put_u16(struct nlmsghdr *nlh, int type, __u16 data)
-{
-	mynla_put(nlh, type, sizeof data, &data);
-}
-
-void mynla_put_u32(struct nlmsghdr *nlh, int type, __u32 data)
-{
-	mynla_put(nlh, type, sizeof data, &data);
-}
-
 typedef int rtnl_handler(struct nlmsghdr *nh, void *arg);
 
 /**
@@ -173,7 +134,7 @@ static ssize_t rtnl_send_linkmode(int s, int ifindex,
 	return send(s, &req, req.nh.nlmsg_len, 0);
 }
 
-static int rtnl_set_linkmode(int ifindex, const char *ifname, __u8 linkmode)
+int set_linkmode(int ifindex, const char *ifname, __u8 linkmode)
 {
 	int s;
 	int rc;
@@ -299,11 +260,6 @@ int get_operstate(char *ifname)
 	rtnl_recv_operstate(s, ifindex, ifname, &operstate);
 	close(s);
 	return operstate;
-}
-
-int set_linkmode(const char *ifname, __u8 linkmode)
-{
-	return rtnl_set_linkmode(0, ifname, linkmode);
 }
 
 int get_perm_hwaddr(const char *ifname, u8 *buf_perm, u8 *buf_san)

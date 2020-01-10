@@ -16,8 +16,8 @@ ACLOCAL_AMFLAGS = -I m4
 parse_cli.o: CFLAGS+=-U_FORTIFY_SOURCE -Wno-error
 
 ## system requires a shared libconfig
-AM_CFLAGS = -Wall -Werror -Wextra -Wformat=2 $(LIBCONFIG_CFLAGS)
-AM_LDFLAGS = $(LIBCONFIG_LIBS)
+AM_CFLAGS = -Wall -Werror -Wextra -Wformat=2 $(LIBCONFIG_CFLAGS) $(LIBNL_CFLAGS)
+AM_LDFLAGS = $(LIBCONFIG_LIBS) $(LIBNL_LIBS)
 
 ## header files to be installed, for programs using the client interface to lldpad 
 lldpad_includedir= ${includedir}/lldpad
@@ -27,7 +27,7 @@ include/clif.h include/lldp_dcbx_cmds.h \
 include/lldpad.h include/lldp_mand_cmds.h \
 include/clif_msgs.h include/lldp_basman_cmds.h include/lldp_8023_cmds.h \
 include/lldp_med_cmds.h include/lldp_util.h \
-include/lldp_evb_cmds.h include/lldp_vdp_cmds.h include/lldp_8021qaz_cmds.h \
+include/lldp_evb_cmds.h include/qbg_vdp_cmds.h include/lldp_8021qaz_cmds.h \
 include/clif_sock.h include/linux/dcbnl.h \
 include/linux/netlink.h include/linux/rtnetlink.h \
 include/lldpad_status.h
@@ -40,7 +40,7 @@ include/lldpad_shm.h include/event_iface.h include/messages.h \
 include/parse_cli.h include/version.h include/lldptool_cli.h include/list.h \
 include/lldp_mand_clif.h include/lldp_basman_clif.h include/lldp_med_clif.h \
 include/lldp_8023_clif.h include/lldp_dcbx_clif.h include/lldp_evb_clif.h \
-include/lldp_evb22_clif.h include/lldp_vdp_clif.h include/lldp_vdpnl.h \
+include/lldp_evb22_clif.h include/qbg_vdp_clif.h include/qbg_vdpnl.h \
 include/lldp_8021qaz_clif.h \
 include/lldp_orgspec_clif.h include/lldp_cisco_clif.h \
 include/lldptool.h include/lldp_rtnl.h include/dcbtool.h include/lldp_dcbx_cfg.h
@@ -56,19 +56,20 @@ lldp_dcbx.c include/lldp_dcbx.h tlv_dcbx.c include/tlv_dcbx.h \
 lldp_dcbx_cfg.c include/lldp_dcbx_cfg.h lldp_util.c \
 lldp_mand.c include/lldp_mand.h \
 lldp_mand_cmds.c lldp_basman_cmds.c lldp_8023_cmds.c lldp_med_cmds.c \
-lldp_evb_cmds.c lldp_evb.c include/lldp_evb.h lldp_vdp_cmds.c \
-include/lldp_vdp_cmds.h \
-include/lldp_ecp.h include/lldp_qbg_utils.h lldp_ecp.c lldp_qbg_utils.c \
-lldp_vdp.c include/lldp_vdp.h \
+lldp_evb_cmds.c lldp_evb.c include/lldp_evb.h qbg/vdp_cmds.c \
+include/qbg_vdp_cmds.h \
+include/qbg_ecp.h include/qbg_utils.h qbg/ecp.c qbg_utils.c \
+qbg/vdp.c include/qbg_vdp.h \
 lldp_tlv.c include/lldp_tlv.h \
 lldp_basman.c include/lldp_basman.h \
 lldp_med.c include/lldp_med.h \
 lldp_8023.c include/lldp_8023.h \
 lldp_8021qaz.c include/lldp_8021qaz.h \
 lldp_8021qaz_cmds.c include/lldp_8021qaz_cmds.h \
-include/lldp_evb22.h qbg/lldp_evb22.c qbg/lldp_evb22_cmds.c \
-include/lldp_qbg22.h include/lldp_ecp22.h qbg/lldp_ecp22.c \
-include/lldp_vdp22.h qbg/lldp_vdp22.c qbg/lldp_vdpnl.c
+include/lldp_evb22.h lldp_evb22.c lldp_evb22_cmds.c \
+include/qbg22.h include/qbg_ecp22.h qbg/ecp22.c \
+include/qbg_vdp22.h qbg/vdp22.c qbg/vdpnl.c qbg/vdp22sm.c qbg/vdp22br.c \
+include/qbg_vdp22def.h qbg/vdp22_cmds.c qbg/vdp_ascii.c
 
 lib_LTLIBRARIES = liblldp_clif.la
 liblldp_clif_la_LDFLAGS = -version-info 1:0:0
@@ -83,11 +84,11 @@ dcbtool_LDFLAGS = -ldl -llldp_clif
 lldptool_SOURCES = lldptool.c lldptool_cmds.c lldp_rtnl.c \
 		   lldp_mand_clif.c lldp_basman_clif.c lldp_med_clif.c \
 		   lldp_8023_clif.c lldp_dcbx_clif.c lldp_util.c \
-		   lldp_8021qaz_clif.c lldp_evb_clif.c lldp_vdp_clif.c \
-		   lldp_orgspec_clif.c lldp_cisco_clif.c qbg/lldp_evb22_clif.c \
+		   lldp_8021qaz_clif.c lldp_evb_clif.c qbg/vdp_clif.c \
+		   lldp_orgspec_clif.c lldp_cisco_clif.c lldp_evb22_clif.c \
 		   weak_readline.c $(lldpad_include_HEADERS) $(noinst_HEADERS)
 lldptool_LDADD = ${srcdir}/liblldp_clif.la
-lldptool_LDFLAGS = -ldl -llldp_clif
+lldptool_LDFLAGS = -ldl -llldp_clif $(LIBNL_LIBS)
 
 if BUILD_DEBUG
 nltest_SOURCES = test/nltest.c test/nltest.h
@@ -120,25 +121,21 @@ pkgconfig_DATA = lldpad.pc liblldp_clif.pc
 ## put a spec file and documentation in the distribution archive
 dist_noinst_DATA = lldpad.spec README COPYING ChangeLog
 
-## lldpad.init is listed here because it gets installed from install-data-local
-dist_noinst_SCRIPTS = lldpad.init
-
 ## special hooks to handle the init script
-install-data-local: lldpad.init
-	$(MKDIR_P) $(DESTDIR)/etc/init.d
-	$(INSTALL_SCRIPT) lldpad.init $(DESTDIR)/etc/init.d/lldpad
+install-data-local: lldpad.service lldpad.socket
+	$(MKDIR_P) $(DESTDIR)/usr/lib/systemd/system
+	$(INSTALL_DATA) lldpad.service $(DESTDIR)/usr/lib/systemd/system/lldpad.service
+	$(INSTALL_DATA) lldpad.socket $(DESTDIR)/usr/lib/systemd/system/lldpad.socket
 
 BASH_COMPLETION_DIR=/etc/bash_completion.d/
 
 install-data-hook:
-	/sbin/chkconfig --add lldpad || true
 	## provide support for bash completion
 	$(MKDIR_P) $(DESTDIR)/$(BASH_COMPLETION_DIR)
-	$(INSTALL_SCRIPT) ${srcdir}/contrib/bash_completion/* $(DESTDIR)/$(BASH_COMPLETION_DIR)
+	$(INSTALL_DATA) ${srcdir}/contrib/bash_completion/* $(DESTDIR)/$(BASH_COMPLETION_DIR)
 
 uninstall-local:
-	/sbin/chkconfig --del lldpad || true
-	rm -f '$(DESTDIR)/etc/init.d/lldpad'
+	rm -f '$(DESTDIR)/usr/lib/systemd/system/lldpad.*'
 	rm -f '$(includedir)/dcbd/clif_cmds.h'
 	rm -f '$(includedir)/dcbd'
 
