@@ -1,0 +1,51 @@
+Disabling PG currently validates the entire given PG config,
+even if no configuration is given.  Of course since PG is
+being disabled, the configuration wouldn't be used anyway, so
+ignore any PG configuration given when disabling it.
+
+Signed-off-by: Dan Williams <dcbw at redhat.com>
+---
+ lldp_dcbx_cmds.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/lldp_dcbx_cmds.c b/lldp_dcbx_cmds.c
+index 7fdf6c4..8dcee7a 100644
+--- a/lldp_dcbx_cmds.c
++++ b/lldp_dcbx_cmds.c
+@@ -939,14 +939,18 @@ static int set_pg_config(pg_attribs *pg_data, char *port_id, char *ibuf,
+ 	cmd_status status = cmd_success;
+ 	int i, is_pfc;
+ 	int plen;
+ 	int off;
+ 	bool used[MAX_BANDWIDTH_GROUPS];
+ 	bool uppcts_changed = false;
+ 
++	/* If PG is disabled, skip changing any other attributes */
++	if (!(pg_data->protocol.Enable))
++		goto done;
++
+ 	plen=strlen(port_id);
+ 	off = DCB_PORT_OFF + plen + CFG_LEN;
+ 
+ 	if (ilen == (off + CFG_PG_DLEN)) {
+ 		for (i = 0; i < MAX_USER_PRIORITIES; i++) {
+ 			flag = *(ibuf+off+PG_UP2TC(i));
+ 			if (flag == CLIF_NOT_SUPPLIED)
+@@ -1063,14 +1067,15 @@ static int set_pg_config(pg_attribs *pg_data, char *port_id, char *ibuf,
+ 	}
+ 
+ 	if (status != cmd_success) {
+ 		printf("invalid DCB settings\n");
+ 		return status;
+ 	}
+ 
++done:
+ 	is_pfc = get_pfc(port_id, &pfc_data);
+ 	if (is_pfc == cmd_success)
+ 		status = put_pg(port_id, pg_data, &pfc_data);
+ 	else
+ 		status = put_pg(port_id, pg_data, NULL);
+ 
+ 	if (status != cmd_success)
+-- 
+1.8.5.3
