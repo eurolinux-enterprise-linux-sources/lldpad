@@ -3,23 +3,20 @@
 
 Name:               lldpad
 Version:            0.9.46
-Release:            9%{?dist}
+Release:            10%{?dist}
 Summary:            Intel LLDP Agent
 Group:              System Environment/Daemons
 License:            GPLv2
 URL:                http://open-lldp.org/
 Source0:            %{name}-%{version}.tar.gz
-Patch0:             %{name}-0.9.46-multiple-vm-support.patch
-Patch1:             %{name}-0.9.46-migrate-properly-with-vepa.patch
-Patch2:             %{name}-0.9.46-Ignore-supplied-PG-configuration-if-PG-is-being-disabled.patch
-Patch3:             lldpad-do-not-require-active-TLVs-to-configure-attri.patch
-Patch4:             lldpad-correct-IEEE-DCBX-capabilities-check.patch
+Patch0:             %{name}-%{version}-123-g48a5f38.patch
+Patch1:             %{name}-0.9.46-Ignore-supplied-PG-configuration-if-PG-is-being-disabled.patch
 Requires:           kernel >= 2.6.32
 BuildRequires:      automake autoconf libtool
 BuildRequires:      flex >= 2.5.33
 BuildRequires:      kernel-headers >= 2.6.32
 BuildRequires:      libconfig-devel >= 1.3.2
-BuildRequires:      libnl-devel
+BuildRequires:      libnl3-devel
 BuildRequires:      readline-devel
 BuildRequires:      systemd
 Requires:           readline
@@ -48,9 +45,6 @@ that use %{name}.
 %setup -q
 %patch0 -p1
 %patch1 -p1
-%patch2 -p1
-%patch3 -p1
-%patch4 -p1
 
 %build
 ./bootstrap.sh
@@ -61,23 +55,19 @@ make %{?_smp_mflags}
 
 %install
 make install DESTDIR=%{buildroot}
-rm -f %{buildroot}%{_mandir}/man8/dcbd.8
-mkdir -p %{buildroot}%{_unitdir}
-install -m644 %{name}.service %{buildroot}%{_unitdir}
-rm -rf %{buildroot}/etc/init.d
 mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 rm -f %{buildroot}%{_libdir}/liblldp_clif.la
 
 %post
 /sbin/ldconfig
-%systemd_post %{name}.service
+%systemd_post %{name}.service %{name}.socket
 
 %preun
-%systemd_preun %{name}.service
+%systemd_preun %{name}.service %{name}.socket
 
 %postun
 /sbin/ldconfig
-%systemd_postun_with_restart %{name}.service
+%systemd_postun_with_restart %{name}.service %{name}.socket
 
 %post devel
 ## provide legacy support for apps that use the old dcbd interface.
@@ -102,6 +92,7 @@ fi
 %{_libdir}/liblldp_clif.so.*
 %dir %{_sharedstatedir}/%{name}
 %{_unitdir}/%{name}.service
+%{_unitdir}/%{name}.socket
 %dir %{_sysconfdir}/bash_completion.d/
 %{_sysconfdir}/bash_completion.d/*
 %{_mandir}/man8/*
@@ -112,6 +103,9 @@ fi
 %{_libdir}/liblldp_clif.so
 
 %changelog
+* Tue Oct 21 2014 Chris Leech <cleech@redhat.com> - 0.9.46-10
+- Sync with upstream v0.9.46-123-g48a5f38 (#1087096)
+
 * Fri Jun 27 2014 Chris Leech <cleech@redhat.com> - 0.9.46-9
 - Fix IEEE mode DCBX (#1102886)
 
